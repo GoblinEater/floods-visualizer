@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Floods, Amplification & Firewall Logic — Goblin Eaters Cyber Cavern</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0b0e14;
+  --surface: #111520;
+  --surface2: #161b28;
+  --border: #1e2636;
+  --border2: #263040;
+  --text: #c8d4e8;
+  --dim: #6b7f9e;
+  --faint: #3a4a60;
+  --blue: #4a9eff;
+  --blue-dim: #1e3d6e;
+  --green: #3ecf8e;
+  --green-dim: #0e3024;
+  --red: #ff4d6a;
+  --red-dim: #3d0f18;
+  --amber: #ffb340;
+  --amber-dim: #3d2800;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 1.2rem;
+}
+
+.wrap { max-width: 1100px; margin: 0 auto; }
+
+.header { margin-bottom: 1rem; }
+.header-title {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(1.1rem, 2.2vw, 1.4rem);
+  font-weight: 800;
+}
+.header-sub {
+  font-size: 0.68rem;
+  color: var(--dim);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-top: 0.2rem;
+}
+
+.scenario-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 1.1rem 0;
+}
+.scenario-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--dim);
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.scenario-btn:hover:not(:disabled) { color: var(--text); border-color: var(--dim); }
+.scenario-btn.active { background: var(--blue-dim); border-color: var(--blue); color: var(--blue); }
+.scenario-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.scenario-btn .soon { font-size: 0.58rem; color: var(--faint); display: block; margin-top: 0.15rem; }
+
+.howto {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  color: var(--dim);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0.55rem 0.9rem;
+  margin-bottom: 1rem;
+}
+.howto-step b { color: var(--blue); font-weight: 600; }
+.howto-arrow { color: var(--faint); }
+
+.compare-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  margin-bottom: 1rem;
+}
+
+.comp-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+}
+
+.comp-row-head {
+  padding: 0.5rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.comp-row-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.comp-row-label.good { color: var(--green); }
+.comp-row-label.bad { color: var(--red); }
+.comp-row-label.neutral { color: var(--blue); }
+
+.chip-strip { display: flex; gap: 0.4rem; }
+
+.actor-chip-zone {
+  min-height: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  margin-bottom: 0.3rem;
+}
+.chip {
+  font-size: 0.62rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 3px;
+  border: 1px solid var(--border2);
+  color: var(--dim);
+  background: var(--bg);
+  transition: all 0.25s;
+  white-space: nowrap;
+}
+.chip.state-empty   { border-color: var(--border2); color: var(--dim); }
+.chip.state-good     { border-color: var(--green); color: var(--green); background: var(--green-dim); }
+.chip.state-bad       { border-color: var(--red); color: var(--red); background: var(--red-dim); }
+.chip.state-pending  { border-color: var(--amber); color: var(--amber); background: var(--amber-dim); }
+
+.rail-flow-label {
+  position: absolute;
+  top: 0.4rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 3px;
+  padding: 0.1rem 0.5rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 4;
+  white-space: nowrap;
+}
+.rail-flow-label.visible { opacity: 1; }
+
+.rail {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 1.6rem 2rem 0.5rem;
+}
+
+.actor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  z-index: 2;
+  transition: opacity 0.3s;
+}
+
+.actor-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  border: 1.5px solid var(--border2);
+  background: var(--bg);
+  transition: all 0.25s;
+}
+.actor-icon.attacker { border-color: var(--faint); color: var(--faint); }
+.actor-icon.attacker.active { border-color: var(--red); color: var(--red); box-shadow: 0 0 14px rgba(255,77,106,0.35); }
+.actor-icon.guard { border-color: var(--faint); color: var(--faint); }
+.actor-icon.guard.active { border-color: var(--green); color: var(--green); box-shadow: 0 0 14px rgba(62,207,142,0.35); }
+.actor-icon.guard.exhausted { border-color: var(--red); color: var(--red); background: var(--red-dim); }
+.actor-icon.checkpoint { border-color: var(--faint); color: var(--faint); }
+.actor-icon.checkpoint.active { border-color: var(--blue); color: var(--blue); box-shadow: 0 0 14px rgba(74,158,255,0.35); }
+.actor-icon.checkpoint.saturated {
+  animation: pulse-overload 0.55s infinite alternate;
+}
+@keyframes pulse-overload {
+  0%   { border-color: var(--amber); color: var(--amber); background: var(--amber-dim); box-shadow: 0 0 10px rgba(255,179,64,0.45); }
+  100% { border-color: var(--red);   color: var(--red);   background: var(--red-dim);   box-shadow: 0 0 22px rgba(255,77,106,0.85); }
+}
+.actor-icon.church { border-color: var(--faint); color: var(--faint); }
+
+.actor-label { font-size: 0.62rem; color: var(--dim); text-align: center; }
+.actor-sub { font-size: 0.56rem; color: var(--faint); text-align: center; }
+
+.rail-line {
+  position: absolute;
+  left: 3rem; right: 3rem;
+  top: 55%;
+  height: 1px;
+  background: var(--border2);
+  z-index: 1;
+}
+
+.packet {
+  position: absolute;
+  top: 55%;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  transition: left 0.7s cubic-bezier(.4,0,.2,1), top 0.7s cubic-bezier(.4,0,.2,1), opacity 0.35s, border-color 0.35s;
+  pointer-events: none;
+}
+.packet.lost {
+  border: 2px dashed currentColor;
+  background: transparent !important;
+}
+
+.actor-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  z-index: 2;
+}
+.actor-stack .actor-icon.small {
+  width: 36px;
+  height: 36px;
+  font-size: 0.9rem;
+}
+
+.comp-row.tall { min-height: 320px; }
+.comp-row.tall .rail { padding-top: 2.4rem; padding-bottom: 0.8rem; }
+
+.comp-msg {
+  padding: 0.55rem 0.9rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.78rem;
+  color: var(--text);
+  min-height: 2.6em;
+  line-height: 1.5;
+}
+
+.controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+.ctrl-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.ctrl-btn:hover:not(:disabled) { border-color: var(--dim); color: var(--blue); }
+.ctrl-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.ctrl-btn.primary { background: var(--blue-dim); border-color: var(--blue); color: var(--blue); }
+.ctrl-btn.auto.running { color: var(--amber); border-color: var(--amber); }
+.step-counter { font-size: 0.7rem; color: var(--dim); margin-left: 0.3rem; }
+
+.synthesis {
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 0.9rem 1.1rem;
+  background: var(--surface);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text);
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: opacity 0.4s, max-height 0.4s;
+}
+.synthesis.visible { opacity: 1; max-height: 200px; padding: 0.9rem 1.1rem; }
+.synthesis-lbl {
+  font-size: 0.62rem;
+  color: var(--amber);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  margin-bottom: 0.35rem;
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="header">
+    <div class="header-title">Floods, Amplification & Firewall Logic</div>
+    <div class="header-sub">Layer 4 Part 2 · Week 7b · Goblin Eaters Cyber Cavern</div>
+  </div>
+
+  <div class="scenario-row" id="scenarioRow"></div>
+
+  <div class="howto">
+    <span class="howto-step"><b>1.</b> Pick a scenario above</span>
+    <span class="howto-arrow">&rarr;</span>
+    <span class="howto-step"><b>2.</b> Step through with <b>Next / Prev</b> below, or press <b>Auto Play</b> to run it hands-free</span>
+  </div>
+
+  <div class="compare-wrap" id="compareWrap"></div>
+
+  <div class="controls">
+    <button class="ctrl-btn" id="btnPrev" onclick="prevStep()">← Prev</button>
+    <button class="ctrl-btn primary" id="btnNext" onclick="nextStep()">Next →</button>
+    <button class="ctrl-btn auto" id="btnAuto" onclick="toggleAuto()">▶ Auto Play</button>
+    <button class="ctrl-btn" onclick="resetScenario()">Reset</button>
+    <span class="step-counter" id="stepCounter"></span>
+  </div>
+
+  <div class="synthesis" id="synthesis">
+    <div class="synthesis-lbl">Synthesis</div>
+    <div id="synthesisText"></div>
+  </div>
+</div>
+
+<script>
+const ACTORS = {
+  church:     { label: 'Church',            sub: 'DNS / NTP Server',    icon: '\u26EA', cls: 'church' },
+  attacker:   { label: 'Attacker',          sub: '',                    icon: '\u2620', cls: 'attacker' },
+  traveler:   { label: 'Traveler',          sub: '',                    icon: '\u25B3', cls: 'attacker' },
+  checkpoint: { label: 'Checkpoint Captain', sub: 'Firewall',           icon: '\u2691', cls: 'checkpoint' },
+  guard:      { label: 'Castle Guard',      sub: 'Host / OS',           icon: '\u2699', cls: 'guard' },
+};
+
+const SCENARIOS = {
+
+  floodNoCookies: {
+    title: 'SYN Flood — No Cookies',
+    synthesis: 'The castle guard isn\u2019t short on staff. He\u2019s out of rooms \u2014 and every one of those rooms is held open by a reply that will never be answered, sent to an address that was never real. The checkpoint captain never had a reason to stop any of it.',
+    rows: [
+      {
+        label: 'Legitimate Proposal', tone: 'good',
+        actors: ['traveler', 'guard'],
+        chips: [{ id: 'room', target: 'guard', label: 'Room', init: 'EMPTY', state: 'empty' }],
+        steps: [
+          { from: 'traveler', to: 'guard', count: 1, pcolor: 'blue', flow: 'SYN',
+            syncColor: true, activate: ['guard'],
+            msg: 'A traveler proposes to enter, and the guard reserves a room for it.',
+            chips: { room: ['RESERVED','pending'] } },
+          { from: 'guard', to: 'traveler', count: 1, pcolor: 'blue', flow: 'SYN-ACK',
+            msg: 'The guard sends his confirmation back \u2014 to the traveler\u2019s real address.',
+            chips: { room: ['RESERVED','pending'] } },
+          { from: 'traveler', to: 'guard', count: 1, pcolor: 'green', flow: 'ACK',
+            msg: 'The traveler returns with final confirmation. Room claimed \u2014 the exchange begins.',
+            chips: { room: ['CLAIMED','good'] } },
+        ]
+      },
+      {
+        label: 'Imposter Flood', tone: 'bad',
+        actors: ['attacker', 'guard'],
+        chips: [{ id: 'room', target: 'guard', label: 'Rooms', init: '0 / 8', state: 'empty' }],
+        steps: [
+          { from: 'attacker', to: 'guard', count: 8, pcolor: 'red', flow: 'SYN \u00d7 8',
+            syncColor: true, activate: ['guard'], exhaust: true,
+            msg: 'A crowd of imposters proposes to enter, all at once \u2014 each one well-formed enough that the guard reserves a room for every one.',
+            chips: { room: ['8 / 8','bad'] } },
+          { from: 'guard', to: 'attacker', count: 8, pcolor: 'red', lost: true, flow: 'SYN-ACK \u00d7 8 \u2014 undeliverable',
+            exhaust: true,
+            msg: 'The guard replies to each \u2014 but the return address was never real. Every reply vanishes into nowhere.',
+            chips: { room: ['8 / 8','bad'] } },
+          { hold: true, exhaust: true, flow: '',
+            msg: 'No ACK ever comes back. The rooms stay held until they time out \u2014 and a real traveler is turned away.',
+            chips: { room: ['FULL','bad'] } },
+        ]
+      }
+    ]
+  },
+
+  floodCookies: {
+    title: 'SYN Flood — With SYN Cookies',
+    synthesis: 'Same flood. Nothing to exhaust \u2014 because nothing was ever reserved on the strength of a proposal alone. The guard\u2019s reply still goes nowhere, same as before, but this time nothing was riding on it coming back. The room only gets built once a real traveler brings the value back with him.',
+    rows: [
+      {
+        label: 'Unprotected (No Cookies)', tone: 'bad', tall: true,
+        actors: ['traveler', 'attacker', 'guard'],
+        stackPair: ['traveler', 'attacker'],
+        chips: [{ id: 'room', target: 'guard', label: 'Rooms', init: '0 / 8', state: 'empty' }],
+        steps: [
+          { from: 'attacker', to: 'guard', count: 8, pcolor: 'red', flow: 'SYN \u00d7 8',
+            syncColor: true, activate: ['guard'], exhaust: true,
+            msg: 'A crowd of imposters proposes to enter, and the guard reserves a room for each one, same as always.',
+            chips: { room: ['8 / 8','bad'] } },
+          { from: 'guard', to: 'attacker', count: 8, pcolor: 'red', lost: true, flow: 'SYN-ACK \u00d7 8 \u2014 undeliverable',
+            exhaust: true,
+            msg: 'His replies go nowhere \u2014 and this time, that matters, because rooms are already held for them.',
+            chips: { room: ['8 / 8','bad'] } },
+          { from: 'traveler', to: 'guard', count: 1, pcolor: 'green', lost: true, flow: 'SYN (real traveler) \u2014 refused',
+            exhaust: true,
+            msg: 'A real traveler arrives right after \u2014 there\u2019s nowhere left to put him. Arriving a moment too late cost him the connection.',
+            chips: { room: ['FULL','bad'] } },
+        ]
+      },
+      {
+        label: 'With SYN Cookies', tone: 'good', tall: true,
+        actors: ['traveler', 'attacker', 'guard'],
+        stackPair: ['traveler', 'attacker'],
+        chips: [{ id: 'room', target: 'guard', label: 'Reserved', init: '0', state: 'empty' }],
+        steps: [
+          { from: 'attacker', to: 'guard', count: 8, pcolor: 'red', mixIndex: 3, mixColor: 'green', mixFrom: 'traveler',
+            flow: 'SYN \u00d7 8',
+            msg: 'The same crowd proposes to enter \u2014 and this time, the real traveler is mixed right into it, arriving at the same moment as everyone else. It doesn\u2019t matter. The guard reserves nothing for any of them; he just computes a value and sends it back.',
+            chips: { room: ['0','good'] } },
+          { from: 'guard', to: 'attacker', count: 8, pcolor: 'red', mixIndex: 3, mixColor: 'green', mixTo: 'traveler', lost: true,
+            flow: 'SYN-ACK \u00d7 8 \u2014 one reaches a real address',
+            msg: 'Seven replies vanish into nowhere, sent to addresses that were never real. One reaches the traveler who actually asked.',
+            chips: { room: ['0','good'] } },
+          { from: 'traveler', to: 'guard', count: 1, pcolor: 'green', flow: 'ACK (valid value)',
+            syncColor: true, activate: ['guard'],
+            msg: 'That traveler returns bearing the correct value. The room is built now \u2014 for the first time.',
+            chips: { room: ['1','good'] } },
+        ]
+      }
+    ]
+  },
+
+  statefulACK: {
+    title: 'Forged ACK — Stateless vs. Stateful',
+    synthesis: 'Correctly filled-in papers only prove the papers were made correctly. They say nothing about whether the exchange behind them ever really began. A stateless checkpoint can only ask the first question. A stateful one can ask the second \u2014 and only the second one catches this.',
+    rows: [
+      {
+        label: 'Stateless Checkpoint', tone: 'bad',
+        actors: ['attacker', 'checkpoint', 'guard'],
+        chips: [
+          { id: 'papers', target: 'checkpoint', label: 'Papers', init: '\u2014', state: 'empty' },
+          { id: 'result', target: 'checkpoint', label: 'Result', init: '\u2014', state: 'empty' },
+        ],
+        steps: [
+          { from: 'attacker', to: 'checkpoint', count: 1, pcolor: 'red', flow: 'ACK (no prior SYN)',
+            msg: 'A lone ACK arrives at the checkpoint captain\u2019s post \u2014 papers correctly filled out, claiming to belong to an exchange already underway.',
+            chips: { papers: ['WELL-FORMED','good'], result: ['\u2014','empty'] } },
+          { hold: true, activate: ['checkpoint'], flow: '',
+            msg: 'The stateless checkpoint captain checks only the rulebook. Structurally, there\u2019s nothing wrong with it.',
+            chips: { papers: ['WELL-FORMED','good'], result: ['PASSES RULEBOOK','pending'] } },
+          { from: 'checkpoint', to: 'guard', count: 1, pcolor: 'red', flow: 'ACK \u2014 waved through',
+            syncColor: true, exhaust: true,
+            msg: 'He has no ledger to check it against. It\u2019s waved through \u2014 and reaches the castle guard, whether or not this exchange ever really began.',
+            chips: { result: ['WAVED THROUGH','bad'] } },
+        ]
+      },
+      {
+        label: 'Stateful Checkpoint', tone: 'good',
+        actors: ['attacker', 'checkpoint', 'guard'],
+        chips: [
+          { id: 'ledger', target: 'checkpoint', label: 'Ledger', init: '\u2014', state: 'empty' },
+          { id: 'result', target: 'checkpoint', label: 'Result', init: '\u2014', state: 'empty' },
+        ],
+        steps: [
+          { from: 'attacker', to: 'checkpoint', count: 1, pcolor: 'red', flow: 'ACK (no prior SYN)',
+            msg: 'The identical lone ACK arrives \u2014 same papers, same claim.',
+            chips: { ledger: ['CHECKING','empty'], result: ['\u2014','empty'] } },
+          { hold: true, activate: ['checkpoint'], flow: '',
+            msg: 'The stateful checkpoint captain checks his ledger for a matching proposal that actually crossed this post.',
+            chips: { ledger: ['NO ENTRY FOUND','bad'], result: ['\u2014','empty'] } },
+          { from: 'checkpoint', to: 'checkpoint', count: 1, pcolor: 'red', lost: true, flow: 'ACK \u2014 dropped',
+            syncColor: true, activate: ['checkpoint'],
+            msg: 'No matching entry exists. He drops it silently \u2014 no message sent back, nothing to tell an attacker whether anyone\u2019s even there. It never reaches the castle guard.',
+            chips: { result: ['DROPPED','good'] } },
+        ]
+      }
+    ]
+  },
+  amplification: {
+    title: 'DNS/NTP Amplification',
+    synthesis: 'The checkpoint captain\u2019s ledger works exactly as designed \u2014 every one of these replies fails it, and every one gets dropped. None of them reach the castle guard. But checking eight oversized replies at once still costs something, and at high enough volume, that cost is the attack. Correct rejection isn\u2019t free.',
+    rows: [
+      {
+        label: 'Normal Query', tone: 'good',
+        actors: ['traveler', 'church'],
+        chips: [{ id: 'size', target: 'church', label: 'Response', init: '\u2014', state: 'empty' }],
+        steps: [
+          { from: 'traveler', to: 'church', count: 1, pcolor: 'blue', flow: 'Query',
+            msg: 'A traveler asks the church a simple question.',
+            chips: { size: ['\u2014','empty'] } },
+          { from: 'church', to: 'traveler', count: 1, pcolor: 'blue', flow: 'Answer',
+            msg: 'The church answers in kind \u2014 a small answer to a small question.',
+            chips: { size: ['PROPORTIONATE','good'] } },
+          { hold: true, flow: '',
+            msg: 'Nothing here ever crosses the kingdom\u2019s checkpoint. There was nothing to cross.',
+            chips: { size: ['PROPORTIONATE','good'] } },
+        ]
+      },
+      {
+        label: 'Forged Query (Amplification)', tone: 'bad',
+        actors: ['attacker', 'church', 'checkpoint'],
+        chips: [
+          { id: 'size', target: 'church', label: 'Response', init: '\u2014', state: 'empty' },
+          { id: 'sat', target: 'checkpoint', label: 'Checkpoint', init: '\u2014', state: 'empty' },
+        ],
+        steps: [
+          { from: 'attacker', to: 'church', count: 8, pcolor: 'red', flow: 'Query \u00d7 8 \u2014 forged return address',
+            msg: 'An attacker sends the church a crowd of small questions \u2014 each one claiming the answer should go to the same someone else entirely.',
+            chips: { size: ['\u2014','empty'], sat: ['\u2014','empty'] } },
+          { from: 'church', to: 'checkpoint', count: 8, pcolor: 'red', big: true,
+            flow: 'Answer \u00d7 8 \u2014 each far larger than its question',
+            syncColor: true, saturate: true,
+            msg: 'Every reply is oversized, and all eight land at once. Checking eight oversized replies simultaneously is not free \u2014 the checkpoint captain is already straining under the weight of it.',
+            chips: { size: ['DISPROPORTIONATE','bad'], sat: ['OVERLOADED','bad'] } },
+          { from: 'checkpoint', to: 'checkpoint', count: 8, pcolor: 'red', big: true, lost: true,
+            saturate: true,
+            msg: 'Each one fails his ledger \u2014 nothing here was ever asked from inside \u2014 and he drops every single one. None reach the castle guard. But the cost of checking all eight at once was already paid.',
+            chips: { size: ['DISPROPORTIONATE','bad'], sat: ['OVERLOADED','bad'] } },
+        ]
+      }
+    ]
+  },
+};
+
+const SCENARIO_ORDER = ['floodNoCookies', 'floodCookies', 'statefulACK', 'amplification'];
+
+let currentScenario = 'floodNoCookies';
+let currentStep = -1;
+let autoTimer = null;
+let activePackets = [];
+
+function clearPackets() {
+  activePackets.forEach(dot => {
+    dot.style.opacity = '0';
+    setTimeout(() => dot.remove(), 260);
+  });
+  activePackets = [];
+}
+
+function renderScenarioButtons() {
+  const row = document.getElementById('scenarioRow');
+  row.innerHTML = '';
+  SCENARIO_ORDER.forEach(key => {
+    const s = SCENARIOS[key];
+    const btn = document.createElement('button');
+    btn.className = 'scenario-btn' + (key === currentScenario ? ' active' : '');
+    btn.disabled = !!s.disabled;
+    btn.innerHTML = s.title + (s.disabled ? '<span class="soon">Building next \u2192</span>' : '');
+    btn.onclick = () => selectScenario(key);
+    row.appendChild(btn);
+  });
+}
+
+function renderRows() {
+  const wrap = document.getElementById('compareWrap');
+  wrap.innerHTML = '';
+  const scenario = SCENARIOS[currentScenario];
+
+  scenario.rows.forEach((row, ri) => {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'comp-row' + (row.tall ? ' tall' : '');
+
+    const head = document.createElement('div');
+    head.className = 'comp-row-head';
+    head.innerHTML = `<div class="comp-row-label ${row.tone}">${row.label}</div>`;
+    rowEl.appendChild(head);
+
+    const rail = document.createElement('div');
+    rail.className = 'rail';
+    rail.id = `rail-${ri}`;
+    rail.innerHTML = `
+      <div class="rail-flow-label" id="flow-${ri}"></div>
+      <div class="rail-line"></div>
+    `;
+
+    const stackPair = row.stackPair || [];
+    const rendered = new Set();
+
+    row.actors.forEach(aKey => {
+      if (rendered.has(aKey)) return;
+
+      if (stackPair.includes(aKey)) {
+        const stackEl = document.createElement('div');
+        stackEl.className = 'actor-stack';
+        stackPair.forEach(sKey => {
+          const a = ACTORS[sKey];
+          const actorEl = document.createElement('div');
+          actorEl.className = 'actor';
+          actorEl.id = `actor-${ri}-${sKey}`;
+          actorEl.innerHTML = `
+            <div class="actor-chip-zone" id="chips-${ri}-${sKey}"></div>
+            <div class="actor-icon ${a.cls} small" id="icon-${ri}-${sKey}">${a.icon}</div>
+            <div class="actor-label">${a.label}</div>
+          `;
+          stackEl.appendChild(actorEl);
+          rendered.add(sKey);
+        });
+        rail.appendChild(stackEl);
+        return;
+      }
+
+      const a = ACTORS[aKey];
+      const actorEl = document.createElement('div');
+      actorEl.className = 'actor';
+      actorEl.id = `actor-${ri}-${aKey}`;
+      actorEl.innerHTML = `
+        <div class="actor-chip-zone" id="chips-${ri}-${aKey}"></div>
+        <div class="actor-icon ${a.cls}" id="icon-${ri}-${aKey}">${a.icon}</div>
+        <div class="actor-label">${a.label}</div>
+        ${a.sub ? `<div class="actor-sub">${a.sub}</div>` : ''}
+      `;
+      rail.appendChild(actorEl);
+      rendered.add(aKey);
+    });
+    rowEl.appendChild(rail);
+
+    const msg = document.createElement('div');
+    msg.className = 'comp-msg';
+    msg.id = `msg-${ri}`;
+    msg.textContent = 'Click Next to begin.';
+    rowEl.appendChild(msg);
+
+    wrap.appendChild(rowEl);
+    renderChips(ri, row.chips);
+  });
+}
+
+function renderChips(rowIndex, chipDefs) {
+  const byActor = {};
+  chipDefs.forEach(c => { (byActor[c.target] = byActor[c.target] || []).push(c); });
+  Object.keys(byActor).forEach(aKey => {
+    const zone = document.getElementById(`chips-${rowIndex}-${aKey}`);
+    if (!zone) return;
+    zone.innerHTML = byActor[aKey].map(c =>
+      `<span class="chip state-${c.state}" id="chip-${rowIndex}-${c.id}">${c.label}: ${c.init}</span>`
+    ).join('');
+  });
+}
+
+function actorCenterX(rowIndex, actorKey) {
+  const el = document.getElementById(`actor-${rowIndex}-${actorKey}`);
+  const rail = document.getElementById(`rail-${rowIndex}`);
+  if (!el || !rail) return 0;
+  const railRect = rail.getBoundingClientRect();
+  const elRect = el.getBoundingClientRect();
+  return (elRect.left + elRect.width / 2) - railRect.left;
+}
+
+function actorCenterY(rowIndex, actorKey) {
+  // Uses the icon itself (not the whole actor block) for an accurate vertical target.
+  const icon = document.getElementById(`icon-${rowIndex}-${actorKey}`);
+  const rail = document.getElementById(`rail-${rowIndex}`);
+  if (!icon || !rail) return null;
+  const railRect = rail.getBoundingClientRect();
+  const iconRect = icon.getBoundingClientRect();
+  return (iconRect.top + iconRect.height / 2) - railRect.top;
+}
+
+const PCOLORS = { blue: '#4a9eff', green: '#3ecf8e', red: '#ff4d6a', amber: '#ffb340' };
+
+const ARRIVE_MS = 700;   // matches CSS 'left' transition duration
+const STAGGER_MS = 55;   // delay between packets in a burst
+
+function spawnPackets(rowIndex, step, onArrive) {
+  const rail = document.getElementById(`rail-${rowIndex}`);
+  if (!step.from || !step.to) { if (onArrive) onArrive(); return; }
+  const count = step.count || 1;
+  const fromX = actorCenterX(rowIndex, step.from);
+  const toX = actorCenterX(rowIndex, step.to);
+  const fromY = actorCenterY(rowIndex, step.from);
+  const toY = actorCenterY(rowIndex, step.to);
+  const color = PCOLORS[step.pcolor] || PCOLORS.blue;
+
+  if (step.through) {
+    const cpIcon = document.getElementById(`icon-${rowIndex}-checkpoint`);
+    if (cpIcon) {
+      cpIcon.classList.add('active');
+      setTimeout(() => cpIcon.classList.remove('active'), 500 + count * STAGGER_MS);
+    }
+  }
+
+  for (let i = 0; i < count; i++) {
+    setTimeout(() => {
+      const isMix = (step.mixIndex !== undefined && i === step.mixIndex);
+      const thisColor = isMix ? (PCOLORS[step.mixColor] || PCOLORS.green) : color;
+      const thisLost = step.lost && !isMix; // the mixed-in legitimate packet is never lost
+      const thisFromX = (isMix && step.mixFrom) ? actorCenterX(rowIndex, step.mixFrom) : fromX;
+      const thisToX = (isMix && step.mixTo) ? actorCenterX(rowIndex, step.mixTo) : toX;
+      const thisFromY = (isMix && step.mixFrom) ? actorCenterY(rowIndex, step.mixFrom) : fromY;
+      const thisToY = (isMix && step.mixTo) ? actorCenterY(rowIndex, step.mixTo) : toY;
+
+      const dot = document.createElement('div');
+      dot.className = 'packet' + (thisLost ? ' lost' : '');
+      dot.style.color = thisColor;
+      dot.style.background = thisLost ? 'transparent' : thisColor;
+      dot.style.left = thisFromX + 'px';
+      if (step.big) {
+        dot.style.width = '26px';
+        dot.style.height = '26px';
+      }
+      // Small vertical jitter for burst legibility — skipped for the mixed packet,
+      // which already has its own distinct, real Y position from the actor lookup.
+      const jitter = (count > 1 && !isMix) ? ((i % 4) - 1.5) * 7 : 0;
+      if (thisFromY !== null) {
+        dot.style.top = (thisFromY + jitter) + 'px';
+        dot.style.marginTop = '0px';
+      } else {
+        dot.style.marginTop = jitter + 'px'; // fallback to CSS default top:55%
+      }
+      rail.appendChild(dot);
+      activePackets.push(dot);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const hasDirection = (thisToX !== thisFromX) || (thisToY !== null && thisFromY !== null && thisToY !== thisFromY);
+          if (thisLost && hasDirection) {
+            // Keep traveling past the nominal destination and fade out mid-flight,
+            // rather than landing on the icon and sitting there.
+            const dx = thisToX - thisFromX;
+            const dy = (thisToY !== null && thisFromY !== null) ? (thisToY - thisFromY) : 0;
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            const OVERSHOOT = 46;
+            const extToX = thisToX + (dx / len) * OVERSHOOT;
+            const extToY = (thisToY !== null) ? thisToY + (dy / len) * OVERSHOOT : null;
+            dot.style.transition = 'left 0.9s ease, top 0.9s ease, opacity 0.65s ease 0.3s, border-color 0.35s';
+            dot.style.left = extToX + 'px';
+            if (extToY !== null) dot.style.top = extToY + 'px';
+            dot.style.opacity = '0';
+          } else {
+            dot.style.left = thisToX + 'px';
+            if (thisToY !== null) dot.style.top = (thisToY + (isMix ? 0 : jitter)) + 'px';
+          }
+        });
+      });
+      // Packet stays put after arriving — cleared explicitly when the next step begins.
+    }, i * STAGGER_MS);
+  }
+
+  if (onArrive) {
+    const lastArrival = (count - 1) * STAGGER_MS + ARRIVE_MS;
+    setTimeout(onArrive, lastArrival);
+  }
+}
+
+function applyStep(stepIndex) {
+  clearPackets();
+  const scenario = SCENARIOS[currentScenario];
+  scenario.rows.forEach((row, ri) => {
+    const step = row.steps[stepIndex];
+    if (!step) return;
+
+    const flowEl = document.getElementById(`flow-${ri}`);
+    if (step.flow) {
+      flowEl.textContent = step.flow;
+      flowEl.classList.add('visible');
+    } else {
+      flowEl.classList.remove('visible');
+    }
+
+    document.getElementById(`msg-${ri}`).textContent = step.msg;
+
+    if (step.chips) {
+      Object.keys(step.chips).forEach(chipId => {
+        const [val, state] = step.chips[chipId];
+        const chipEl = document.getElementById(`chip-${ri}-${chipId}`);
+        if (chipEl) {
+          const label = row.chips.find(c => c.id === chipId).label;
+          chipEl.textContent = `${label}: ${val}`;
+          chipEl.className = `chip state-${state}`;
+        }
+      });
+    }
+
+    // Always clear active/exhausted/saturated first.
+    row.actors.forEach(aKey => {
+      const icon = document.getElementById(`icon-${ri}-${aKey}`);
+      if (icon) icon.classList.remove('active', 'exhausted', 'saturated');
+    });
+
+    const applyIconState = () => {
+      if (step.activate) {
+        step.activate.forEach(aKey => {
+          const icon = document.getElementById(`icon-${ri}-${aKey}`);
+          if (icon) icon.classList.add('active');
+        });
+      }
+      if (step.exhaust) {
+        const icon = document.getElementById(`icon-${ri}-guard`);
+        if (icon) icon.classList.add('exhausted');
+      }
+      if (step.saturate) {
+        const icon = document.getElementById(`icon-${ri}-checkpoint`);
+        if (icon) icon.classList.add('saturated');
+      }
+    };
+
+    if (step.syncColor) {
+      // Color change lands exactly when the packets finish arriving and start to fade.
+      spawnPackets(ri, step, applyIconState);
+    } else {
+      spawnPackets(ri, step);
+      applyIconState();
+    }
+  });
+
+  updateControls();
+
+  const maxSteps = Math.max(...scenario.rows.map(r => r.steps.length));
+  if (stepIndex === maxSteps - 1) {
+    showSynthesis(scenario.synthesis);
+  } else {
+    hideSynthesis();
+  }
+}
+
+function nextStep() {
+  const scenario = SCENARIOS[currentScenario];
+  const maxSteps = Math.max(...scenario.rows.map(r => r.steps.length));
+  if (currentStep >= maxSteps - 1) return;
+  currentStep++;
+  applyStep(currentStep);
+}
+
+function prevStep() {
+  if (currentStep <= 0) { resetScenario(); return; }
+  currentStep--;
+  applyStep(currentStep);
+}
+
+function resetScenario() {
+  currentStep = -1;
+  activePackets = [];
+  renderRows();
+  hideSynthesis();
+  updateControls();
+  if (autoTimer) toggleAuto();
+}
+
+function selectScenario(key) {
+  if (SCENARIOS[key].disabled) return;
+  currentScenario = key;
+  renderScenarioButtons();
+  resetScenario();
+}
+
+function updateControls() {
+  const scenario = SCENARIOS[currentScenario];
+  const maxSteps = Math.max(...scenario.rows.map(r => r.steps.length));
+  document.getElementById('btnPrev').disabled = currentStep < 0;
+  document.getElementById('btnNext').disabled = currentStep >= maxSteps - 1;
+  document.getElementById('stepCounter').textContent =
+    currentStep < 0 ? '' : `Step ${currentStep + 1} of ${maxSteps}`;
+}
+
+function toggleAuto() {
+  const btn = document.getElementById('btnAuto');
+  if (autoTimer) {
+    clearTimeout(autoTimer); autoTimer = null;
+    btn.textContent = '\u25b6 Auto Play'; btn.classList.remove('running');
+  } else {
+    btn.textContent = '\u23f8 Pause'; btn.classList.add('running');
+    scheduleAuto();
+  }
+}
+
+const STEP_SPEED = 2400;   // ms between steps within a cycle
+const CYCLE_PAUSE = 1500;  // extra pause after a cycle finishes, before it restarts
+
+function scheduleAuto() {
+  const scenario = SCENARIOS[currentScenario];
+  const maxSteps = Math.max(...scenario.rows.map(r => r.steps.length));
+
+  if (currentStep >= maxSteps - 1) {
+    // Cycle just finished — pause, then reset and start the next cycle.
+    autoTimer = setTimeout(() => {
+      currentStep = -1;
+      renderRows();
+      hideSynthesis();
+      updateControls();
+      nextStep();
+      autoTimer = setTimeout(scheduleAuto, STEP_SPEED);
+    }, CYCLE_PAUSE);
+  } else {
+    nextStep();
+    autoTimer = setTimeout(scheduleAuto, STEP_SPEED);
+  }
+}
+
+function showSynthesis(text) {
+  document.getElementById('synthesisText').textContent = text;
+  document.getElementById('synthesis').classList.add('visible');
+}
+function hideSynthesis() {
+  document.getElementById('synthesis').classList.remove('visible');
+}
+
+renderScenarioButtons();
+renderRows();
+updateControls();
+window.addEventListener('resize', () => { if (currentStep >= 0) applyStep(currentStep); });
+</script>
+</body>
+</html>
